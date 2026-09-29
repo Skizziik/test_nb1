@@ -1,0 +1,544 @@
+import {
+  SAVE_KEY, newSave, eff, Shift, requiredFor, orderPrice, menuFor,
+  shopList, buy, nextLocation, clamp,
+} from "./engine.js";
+
+// ------------------------------------------------------------------ text
+
+const DRINK_NAMES = {
+  espresso: "Espresso", americano: "Americano", iced_coffee: "Iced coffee",
+  cappuccino: "Cappuccino", latte: "Latte", flat_white: "Flat white", mocha: "Mocha",
+  cold_brew: "Cold brew", matcha_latte: "Matcha latte", affogato: "Affogato",
+  pina_colada_latte: "Pina colada latte", pour_over: "Pour over",
+};
+const STEP_ICON = {
+  shot: "☕", water: "💧", ice: "🧊", milk: "🥛", foam: "☁️", syrup: "🍯",
+  chocolate: "🍫", cold_brew: "🫙", matcha: "🍵", ice_cream: "🍨", pineapple: "🍍", pour_over: "⏳",
+};
+const STEP_NAME = {
+  shot: "Espresso shot", water: "Hot water", ice: "Ice", milk: "Steamed milk", foam: "Foam", syrup: "Vanilla syrup",
+};
+const GUEST = {
+  tourist: { label: "Tourist", face: "😎" },
+  local: { label: "Local", face: "😊" },
+  student: { label: "Student", face: "🤓" },
+  office_rush: { label: "Office", face: "🙂" },
+  connoisseur: { label: "Connoisseur", face: "🧐" },
+};
+const EVENT_NAME = { rain: "Rainy day", heatwave: "Heatwave", festival: "Festival", critic: "Critic in town" };
+const EVENT_INTRO = {
+  rain: "Rain today. Fewer guests, and nobody wants iced drinks.",
+  heatwave: "Heatwave. More guests, lots of iced coffee.",
+  festival: "Festival on the beach. Big crowd, short patience.",
+  critic: "A food critic is in town today. Their review counts four times.",
+};
+const UPGRADE_TEXT = {
+  tip_jar: ["Tip jar", "Guests tip 25% more."],
+  grinder: ["Grinder", "Grinds faster and makes better coffee."],
+  espresso_machine: ["Espresso machine", "Pulls shots faster and makes better coffee."],
+  milk_steamer: ["Milk steamer", "Milk heats up faster."],
+  ice_machine: ["Ice machine", "Ice drops in faster."],
+  cold_brew_tower: ["Cold brew tower", "Adds cold brew to the menu."],
+  decor: ["Beach decor", "Brings more guests, and they wait longer."],
+  menu_board: ["Menu board", "Guests accept higher prices."],
+  pos_tablet: ["Order tablet", "Shows the full recipe above every order."],
+  loyalty_cards: ["Loyalty cards", "Guests leave a bit happier."],
+  helper_barista: ["Helper barista", "A second pair of hands for simple drinks."],
+};
+
+// ------------------------------------------------------------------ hero
+
+function heroSVG() {
+  return `
+<svg viewBox="0 0 120 150" role="img" aria-label="The barista: straw hat, long hair, Hawaiian shirt">
+  <defs>
+    <pattern id="shirt" width="24" height="24" patternUnits="userSpaceOnUse">
+      <rect width="24" height="24" fill="#0f8b8d"/>
+      <path d="M3 13c4-6 10-7 14-5-5 0-9 3-11 7z" fill="#2e7d4f"/>
+      <circle cx="18" cy="5" r="2.6" fill="#ff6a3d"/><circle cx="21" cy="7.5" r="2.4" fill="#ff6a3d"/>
+      <circle cx="18.5" cy="6.5" r="1.3" fill="#ffc531"/>
+      <circle cx="6" cy="20" r="1" fill="#fff8e8"/>
+    </pattern>
+  </defs>
+  <path d="M34 60 C30 90 32 104 36 112 L46 108 L44 62 Z" fill="#6b4226"/>
+  <path d="M86 60 C90 90 88 104 84 112 L74 108 L76 62 Z" fill="#6b4226"/>
+  <path d="M22 150 C22 118 34 104 60 104 C86 104 98 118 98 150 Z" fill="url(#shirt)" stroke="#3a2317" stroke-width="3"/>
+  <path d="M48 104 L60 122 L72 104 L66 102 L60 110 L54 102 Z" fill="#fff8e8" stroke="#3a2317" stroke-width="2"/>
+  <rect x="52" y="90" width="16" height="16" rx="4" fill="#e9b48e"/>
+  <ellipse cx="60" cy="68" rx="24" ry="28" fill="#f1c29e" stroke="#3a2317" stroke-width="3"/>
+  <path d="M38 62 C38 44 48 40 60 40 C72 40 82 44 82 62 C76 54 70 52 60 52 C50 52 44 54 38 62 Z" fill="#6b4226"/>
+  <ellipse cx="51" cy="68" rx="3" ry="3.4" fill="#3a2317"/>
+  <ellipse cx="69" cy="68" rx="3" ry="3.4" fill="#3a2317"/>
+  <path d="M46 61 l9 -2 M65 59 l9 2" stroke="#6b4226" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M50 82 C54 78 66 78 70 82 C66 81 54 81 50 82 Z" fill="#6b4226"/>
+  <path d="M52 86 C56 90 64 90 68 86" stroke="#3a2317" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M40 80 C44 92 52 96 60 96 C68 96 76 92 80 80 C76 90 68 93 60 93 C52 93 44 90 40 80 Z" fill="#6b4226" opacity=".45"/>
+  <ellipse cx="60" cy="44" rx="44" ry="10" fill="#e8cf8f" stroke="#3a2317" stroke-width="3"/>
+  <path d="M38 44 C38 22 48 16 60 16 C72 16 82 22 82 44 Z" fill="#f1dca0" stroke="#3a2317" stroke-width="3"/>
+  <path d="M39 38 C52 41 68 41 81 38 L81.5 43 C68 46 52 46 38.5 43 Z" fill="#3a2317"/>
+  <path d="M46 26 l3 10 M56 22 l2 12 M66 22 l-1 12 M75 26 l-3 10" stroke="#c9ae6c" stroke-width="1.5"/>
+</svg>`;
+}
+
+// ------------------------------------------------------------------ state
+
+const $ = (id) => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+const SPEED = clamp(parseFloat(params.get("speed") || "1"), 0.25, 10);
+
+let bal = null;
+let save = null;
+let shift = null;
+let running = false;
+let lastFrame = 0;
+const guestEls = new Map();
+const mg = {}; // minigame state per station id
+
+function persist() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch { /* storage may be unavailable */ }
+}
+function loadSave() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    return s && s.version === 1 ? s : null;
+  } catch { return null; }
+}
+
+function show(id) {
+  for (const el of document.querySelectorAll(".screen")) el.hidden = el.id !== id;
+}
+
+function money(x) { return Math.round(x).toLocaleString("en-US"); }
+
+let toastTimer = 0;
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+function pop(anchor, text, bad = false) {
+  const host = $("screen-shift");
+  const a = anchor.getBoundingClientRect();
+  const h = host.getBoundingClientRect();
+  const el = document.createElement("div");
+  el.className = "pop" + (bad ? " bad" : "");
+  el.textContent = text;
+  el.style.left = `${a.left - h.left + a.width / 2}px`;
+  el.style.top = `${a.top - h.top}px`;
+  host.appendChild(el);
+  setTimeout(() => el.remove(), 1000);
+}
+
+function heroHappy() {
+  const el = document.querySelector("#screen-shift [data-hero] svg");
+  if (!el) return;
+  el.classList.remove("hero-happy");
+  void el.getBoundingClientRect();
+  el.classList.add("hero-happy");
+}
+
+// ------------------------------------------------------------------ stations
+
+function zoneQuality(x, [a, b]) {
+  if (x >= a && x <= b) return 1;
+  const d = x < a ? a - x : x - b;
+  return clamp(1 - d / 0.35, 0.2, 1);
+}
+
+function stationDefs() {
+  const m = bal.mvp.minigames;
+  const coffeeGrind = eff(bal, save, "grinder", "time_mult_coffee", 1);
+  const coffeeShot = eff(bal, save, "espresso_machine", "time_mult_coffee", 1);
+  const milkMult = eff(bal, save, "milk_steamer", "time_mult_milk", 1);
+  const iceMult = eff(bal, save, "ice_machine", "time_mult_iced", 1);
+  return [
+    { id: "cupM", kind: "tap", ico: "🥤", lbl: "Cup M", sub: "regular", act: () => shift.takeCup("M") },
+    { id: "cupL", kind: "tap", ico: "🥤", lbl: "Cup L", sub: "large", big: true, act: () => shift.takeCup("L") },
+    { id: "grind", kind: "hold", ico: "🫘", lbl: "Grinder", sub: "hold, let go in green",
+      dur: m.grind_s * coffeeGrind, zone: m.grind_zone,
+      canStart: () => shift.grounds === null || "The portafilter is already loaded.",
+      done: (x) => (x < 0.15 ? { ok: false, msg: "Hold the grinder a bit longer." } : shift.loadGrounds(zoneQuality(x, m.grind_zone))) },
+    { id: "shot", kind: "toggle", ico: "☕", lbl: "Espresso", sub: "tap start, tap stop",
+      dur: m.extract_s * coffeeShot, zone: m.extract_zone,
+      canStart: () => shift.grounds !== null || "Grind coffee first.",
+      done: (x) => shift.pullShot(x >= 1 ? 0.2 : zoneQuality(x, m.extract_zone)) },
+    { id: "milk", kind: "hold", ico: "🥛", lbl: "Steam milk", sub: "hold, let go in green",
+      dur: m.steam_s * milkMult, zone: m.steam_zone,
+      done: (x) => (x < 0.15 ? { ok: false, msg: "Hold the steamer a bit longer." } : shift.addStep("milk", x >= 1 ? 0.2 : zoneQuality(x, m.steam_zone))) },
+    { id: "foam", kind: "timed", ico: "☁️", lbl: "Foam", sub: "on top of milk", dur: 0.6,
+      canStart: () => (shift.cup && shift.cup.steps.includes("milk")) || "Steam milk before adding foam.",
+      done: () => shift.addStep("foam") },
+    { id: "water", kind: "timed", ico: "💧", lbl: "Hot water", sub: "for americano", dur: 0.8, done: () => shift.addStep("water") },
+    { id: "ice", kind: "timed", ico: "🧊", lbl: "Ice", sub: "for iced drinks", dur: 1.2 * iceMult, done: () => shift.addStep("ice") },
+    { id: "syrup", kind: "timed", ico: "🍯", lbl: "Syrup", sub: "vanilla", dur: 0.5, done: () => shift.addStep("syrup") },
+    { id: "trash", kind: "tap", ico: "🗑️", lbl: "Trash", sub: "start over", act: () => shift.trash(), cls: "trash" },
+  ];
+}
+
+let stations = [];
+
+function buildStations() {
+  const host = $("stations");
+  host.innerHTML = "";
+  stations = stationDefs();
+  for (const s of stations) {
+    const b = document.createElement("button");
+    b.className = "station" + (s.cls ? " " + s.cls : "");
+    b.dataset.id = s.id;
+    b.innerHTML = `<span class="ico">${s.ico}</span><span class="lbl">${s.lbl}</span><span class="sub">${s.sub}</span>`;
+    if (s.kind !== "tap") {
+      const z = s.zone ? `<span class="zone" style="left:${s.zone[0] * 100}%;width:${(s.zone[1] - s.zone[0]) * 100}%"></span>` : "";
+      b.insertAdjacentHTML("beforeend", `<span class="gauge">${z}<span class="fill"></span></span>`);
+    }
+    mg[s.id] = { active: false, x: 0 };
+    wireStation(b, s);
+    host.appendChild(b);
+  }
+}
+
+function result(r) {
+  if (r && r.ok === false && r.msg) toast(r.msg);
+  renderCup();
+}
+
+function startMg(s) {
+  const st = mg[s.id];
+  if (st.active || !running) return;
+  const ok = s.canStart ? s.canStart() : true;
+  if (ok !== true) { toast(ok); return; }
+  st.active = true;
+  st.x = 0;
+}
+function endMg(s) {
+  const st = mg[s.id];
+  if (!st.active) return;
+  st.active = false;
+  const x = st.x;
+  st.x = 0;
+  result(s.done(x));
+}
+
+function wireStation(b, s) {
+  if (s.kind === "tap") {
+    b.addEventListener("click", () => { if (running) result(s.act()); });
+    return;
+  }
+  if (s.kind === "timed" || s.kind === "toggle") {
+    b.addEventListener("click", () => {
+      const st = mg[s.id];
+      if (s.kind === "toggle" && st.active) endMg(s);
+      else startMg(s);
+    });
+    return;
+  }
+  // hold
+  b.addEventListener("pointerdown", (e) => { e.preventDefault(); b.setPointerCapture(e.pointerId); startMg(s); });
+  b.addEventListener("pointerup", () => endMg(s));
+  b.addEventListener("pointercancel", () => endMg(s));
+  b.addEventListener("keydown", (e) => { if ((e.key === " " || e.key === "Enter") && !e.repeat) { e.preventDefault(); startMg(s); } });
+  b.addEventListener("keyup", (e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); endMg(s); } });
+  b.addEventListener("click", (e) => e.preventDefault());
+}
+
+function tickStations(dt) {
+  for (const s of stations) {
+    if (s.kind === "tap") continue;
+    const st = mg[s.id];
+    const el = document.querySelector(`.station[data-id="${s.id}"]`);
+    if (st.active) {
+      st.x += dt / s.dur;
+      if (st.x >= 1) {
+        st.x = 1;
+        if (s.id === "shot") toast("Over-extracted. Stop the shot in the green zone.");
+        if (s.id === "milk") toast("Milk scorched. Let go in the green zone.");
+        if (s.id === "grind") toast("Too fine. Let go in the green zone.");
+        endMg(s);
+      }
+    }
+    el.querySelector(".fill").style.width = `${Math.min(1, st.x) * 100}%`;
+    el.classList.toggle("busy", st.active);
+    if (s.id === "shot") el.classList.toggle("ready", !st.active && shift.grounds !== null);
+    if (s.id === "grind") el.classList.toggle("ready", shift.grounds !== null);
+  }
+}
+
+// ------------------------------------------------------------------ cup + guests
+
+function renderCup() {
+  const slot = $("cup-slot");
+  const hint = $("hint");
+  const cup = shift.cup;
+  if (!cup) {
+    slot.innerHTML = shift.grounds !== null ? `<div class="chips"><span class="chip">Portafilter loaded</span></div>` : "";
+    hint.textContent = shift.customers.length ? "Pick a cup to start." : "Waiting for guests.";
+    return;
+  }
+  const chips = cup.steps.map((s) => `<span class="chip">${STEP_ICON[s]} ${STEP_NAME[s] || s}</span>`).join("");
+  slot.innerHTML = `<div class="cup size-${cup.size}">🥤<span class="cup-size">${cup.size}</span></div><div class="chips">${chips}</div>`;
+  hint.textContent = cup.steps.length ? "Tap a guest to serve." : "Add something to the cup.";
+}
+
+function orderHTML(c) {
+  const mods = [];
+  if (c.mods.includes("size_L")) mods.push("Large");
+  if (c.mods.includes("syrup")) mods.push("+ syrup");
+  const req = requiredFor(bal, c);
+  const steps = save.upgrades.pos_tablet ? `<span class="steps">${req.steps.map((s) => STEP_ICON[s]).join("")}</span>` : "";
+  return `<b>${DRINK_NAMES[c.drinkId]}</b>${mods.length ? `<span class="mods">${mods.join(", ")}</span>` : ""}${steps}`;
+}
+
+function addGuest(c) {
+  const b = document.createElement("button");
+  b.className = "guest" + (c.critic ? " critic" : "");
+  b.setAttribute("aria-label", `${GUEST[c.type].label} wants ${DRINK_NAMES[c.drinkId]}. Serve.`);
+  b.innerHTML = `<div class="order">${orderHTML(c)}</div><div class="face"><span>${GUEST[c.type].face}</span></div><span class="guest-type">${c.critic ? "Critic" : GUEST[c.type].label}</span>`;
+  b.addEventListener("click", () => serveGuest(c.id, b));
+  $("queue").appendChild(b);
+  guestEls.set(c.id, b);
+}
+
+function removeGuest(id) {
+  const el = guestEls.get(id);
+  if (!el) return;
+  guestEls.delete(id);
+  el.classList.add("leaving");
+  setTimeout(() => el.remove(), 300);
+}
+
+function serveGuest(id, el) {
+  if (!running) return;
+  const r = shift.serve(id);
+  if (!r.ok) { toast(r.msg); return; }
+  if (r.correct) {
+    pop(el, `+${money(r.price + r.tip)} 🪙`);
+    if (r.quality >= 0.9) heroHappy();
+  } else {
+    pop(el, "Wrong order", true);
+    toast("That wasn't their order. They paid, but no tip and a bad review.");
+  }
+  renderCup();
+}
+
+function tickGuests() {
+  for (const c of shift.customers) {
+    const el = guestEls.get(c.id);
+    if (!el) continue;
+    const p = shift.patienceLeft(c);
+    const face = el.querySelector(".face");
+    face.style.setProperty("--p", p.toFixed(3));
+    face.style.setProperty("--ring", p > 0.5 ? "var(--good)" : p > 0.25 ? "var(--pineapple)" : "var(--bad)");
+    face.firstElementChild.textContent = p > 0.5 ? GUEST[c.type].face : p > 0.25 ? "😐" : "😠";
+  }
+}
+
+function drainLog() {
+  for (const e of shift.log.splice(0)) {
+    if (e.type === "arrive") addGuest(e.cust);
+    else if (e.type === "leave") {
+      if (e.reason === "full") toast("A guest saw the long line and walked away.");
+      else {
+        const el = guestEls.get(e.cust.id);
+        if (el) pop(el, "Left", true);
+      }
+      removeGuest(e.cust.id);
+    } else if (e.type === "served") removeGuest(e.cust.id);
+  }
+}
+
+function tickHud() {
+  const f = Math.min(1, shift.t / shift.duration);
+  $("clock-fill").style.width = `${f * 100}%`;
+  $("clock-label").textContent =
+    shift.phase === "rush" ? "Morning rush" : shift.phase === "day" ? "Afternoon" : "Closed: serve the last guests";
+  $("hud-coins").textContent = money(save.coins + shift.res.revenue + shift.res.tips);
+  $("hud-stars").textContent = save.rep.toFixed(1);
+}
+
+// ------------------------------------------------------------------ loop
+
+function frame(ts) {
+  if (!shift) return;
+  const dt = Math.min(0.1, (ts - lastFrame) / 1000) * SPEED;
+  lastFrame = ts;
+  if (running) {
+    shift.update(dt);
+    drainLog();
+    tickStations(dt);
+    tickGuests();
+    tickHud();
+    if (!shift.cup) renderCup();
+    if (shift.done) { endShift(); return; }
+  }
+  requestAnimationFrame(frame);
+}
+
+function startShift() {
+  shift = new Shift(bal, save);
+  guestEls.clear();
+  $("queue").innerHTML = "";
+  buildStations();
+  $("hud-day").textContent = `Day ${save.day}`;
+  $("clock-rush").style.width = `${bal.shift.rush_window[1] * 100}%`;
+  const ev = shift.event.name;
+  $("hud-event").hidden = !ev;
+  if (ev) $("hud-event").textContent = EVENT_NAME[ev];
+  show("screen-shift");
+  renderCup();
+  tickHud();
+  if (ev) toast(EVENT_INTRO[ev]);
+  running = true;
+  lastFrame = performance.now();
+  requestAnimationFrame(frame);
+}
+
+function endShift() {
+  running = false;
+  const s = shift.finish();
+  shift = null;
+  persist();
+  $("sum-title").textContent = `Day ${s.day} closed`;
+  $("sum-sub").textContent = s.event ? EVENT_NAME[s.event] : bal.locations[String(save.loc)].name;
+  const lines = [
+    ["Guests served", s.served],
+    ["Guests who left", s.walkouts],
+    ["Perfect drinks", s.perfect],
+    ["Sales", money(s.revenue)],
+    ["Tips", money(s.tips)],
+    ["Ingredients", `-${money(s.ingredients)}`],
+    ["Rent", `-${money(s.rent)}`],
+  ];
+  if (s.wage) lines.push(["Helper wage", `-${money(s.wage)}`]);
+  $("sum-lines").innerHTML = lines.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+  $("sum-profit").textContent = `${s.profit >= 0 ? "+" : ""}${money(s.profit)} 🪙`;
+  const d = s.repAfter - s.repBefore;
+  const cls = d >= 0 ? "up" : "down";
+  $("sum-rep").innerHTML = `Rating ${s.repAfter.toFixed(2)} ⭐ <span class="${cls}">${d >= 0 ? "▲" : "▼"} ${Math.abs(d).toFixed(2)}</span>`;
+  show("screen-summary");
+}
+
+// ------------------------------------------------------------------ shop
+
+function renderShop() {
+  $("shop-coins").textContent = money(save.coins);
+  $("shop-stars").textContent = save.rep.toFixed(1);
+  const list = $("shop-list");
+  list.innerHTML = "";
+  const items = shopList(bal, save).filter((x) => x.status !== "locked" || x.tier === 0);
+  const order = { ok: 0, poor: 1, locked: 2, maxed: 3 };
+  items.sort((a, b) => order[a.status] - order[b.status] || (a.cost ?? 0) - (b.cost ?? 0));
+  for (const it of items) {
+    const [name, desc] = UPGRADE_TEXT[it.id] || [it.id, ""];
+    const li = document.createElement("li");
+    li.className = "shop-item";
+    const tier = it.maxTier > 1 ? `<span class="tier">level ${it.tier} of ${it.maxTier}</span>` : "";
+    let btn;
+    if (it.status === "maxed") btn = `<button class="btn" disabled>Owned</button>`;
+    else if (it.status === "locked") btn = `<button class="btn" disabled>Later</button>`;
+    else btn = `<button class="btn" ${it.status === "poor" ? "disabled" : ""}>Buy for ${money(it.cost)}</button>`;
+    const note = it.status === "locked" ? ` Opens at ${bal.locations[String(it.needLoc)].name}.` : "";
+    li.innerHTML = `<h3>${name}${tier}</h3><p>${desc}${note}</p>${btn}`;
+    const b = li.querySelector("button");
+    if (it.status === "ok") {
+      b.addEventListener("click", () => {
+        if (buy(bal, save, it.id)) { persist(); renderShop(); }
+      });
+    }
+    list.appendChild(li);
+  }
+  const nx = nextLocation(bal, save);
+  const box = $("next-loc");
+  if (nx) {
+    const ready = save.rep >= nx.min_stars && save.coins >= nx.move_cost;
+    box.innerHTML = ready
+      ? `<b>${nx.name}</b> would take you now. Moving opens in a later update, keep the coins.`
+      : `Next spot: <b>${nx.name}</b>. Needs ${nx.min_stars} stars and ${money(nx.move_cost)} coins. Moving opens in a later update.`;
+  } else box.textContent = "";
+  $("btn-next-day").textContent = `Open day ${save.day}`;
+}
+
+// ------------------------------------------------------------------ recipes / pause
+
+function renderRecipes() {
+  const list = $("recipe-list");
+  list.innerHTML = menuFor(bal, save).map(([id, d]) =>
+    `<li><span>${DRINK_NAMES[id]} <small>${money(orderPrice(bal, save, { drinkId: id, mods: [] }))} 🪙</small></span><span class="r-steps" aria-label="${d.recipe.map((s) => STEP_NAME[s] || s).join(", ")}">${d.recipe.map((s) => STEP_ICON[s]).join(" ")}</span></li>`
+  ).join("") + `<li><span>Large</span><span class="r-steps">Cup L</span></li><li><span>+ syrup</span><span class="r-steps">🍯</span></li>`;
+}
+
+function pause() {
+  if (!shift || !running) return;
+  running = false;
+  $("paused").showModal();
+}
+
+// ------------------------------------------------------------------ title
+
+function renderTitle() {
+  const has = save && save.day > 1;
+  $("btn-continue").hidden = !has;
+  $("btn-reset").hidden = !has;
+  if (has) $("btn-continue").textContent = `Continue day ${save.day}`;
+  $("btn-new").textContent = has ? "Open today's shift" : "Open the shack";
+  $("btn-new").hidden = has;
+  show("screen-title");
+}
+
+async function loadBalance() {
+  for (const url of ["data/balance.json", "../data/balance.json"]) {
+    try {
+      const r = await fetch(url, { cache: "no-cache" });
+      if (r.ok) return await r.json();
+    } catch { /* try next */ }
+  }
+  throw new Error("balance.json not found");
+}
+
+async function boot() {
+  for (const el of document.querySelectorAll("[data-hero]")) el.innerHTML = heroSVG();
+  try {
+    bal = await loadBalance();
+  } catch {
+    $("loading-msg").textContent = "Could not load data/balance.json. Serve the site over http, not file://.";
+    return;
+  }
+  save = loadSave() || newSave(bal);
+  $("loading").remove();
+
+  $("btn-new").addEventListener("click", startShift);
+  $("btn-continue").addEventListener("click", startShift);
+  $("btn-reset").addEventListener("click", () => {
+    if (!confirm("Start over from day 1? Your coins and upgrades will be reset.")) return;
+    save = newSave(bal);
+    persist();
+    renderTitle();
+  });
+  $("btn-to-shop").addEventListener("click", () => { renderShop(); show("screen-shop"); });
+  $("btn-next-day").addEventListener("click", startShift);
+  $("btn-recipes").addEventListener("click", () => {
+    renderRecipes();
+    running = false;
+    $("recipes").showModal();
+  });
+  $("recipes").addEventListener("close", () => { if (shift) { running = true; lastFrame = performance.now(); } });
+  $("btn-pause").addEventListener("click", pause);
+  $("paused").addEventListener("close", () => {
+    if ($("paused").returnValue === "quit") {
+      shift = null;
+      running = false;
+      renderTitle();
+      return;
+    }
+    running = true;
+    lastFrame = performance.now();
+  });
+  document.addEventListener("visibilitychange", () => { if (document.hidden) pause(); });
+
+  renderTitle();
+}
+
+boot();

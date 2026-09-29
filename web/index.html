@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Pineapple Barista</title>
+  <meta name="description" content="Run a tiny beach coffee shack: take orders, pull shots, steam milk, keep the queue happy.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍍</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;800&family=Shrikhand&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="app">
+
+    <!-- Title -->
+    <section id="screen-title" class="screen print-bg" hidden>
+      <div class="sign">
+        <h1>Pineapple Barista</h1>
+        <p>A coffee shack on the beach. Your shirt is loud, your espresso is louder.</p>
+      </div>
+      <div class="title-hero" data-hero></div>
+      <div class="title-actions">
+        <button class="btn btn-big" id="btn-continue" hidden></button>
+        <button class="btn btn-big" id="btn-new">Open the shack</button>
+        <button class="btn btn-quiet" id="btn-reset" hidden>Start over</button>
+      </div>
+      <p class="how">Tap a cup, grind, pull a shot, steam milk, then tap the guest to serve. Guests leave when their face turns red.</p>
+    </section>
+
+    <!-- Shift -->
+    <section id="screen-shift" class="screen" hidden>
+      <header class="hud">
+        <div class="hud-day"><span id="hud-day">Day 1</span><span id="hud-event" class="event-tag" hidden></span></div>
+        <div class="clock" aria-label="Shift progress">
+          <div class="clock-rush" id="clock-rush"></div>
+          <div class="clock-fill" id="clock-fill"></div>
+          <span class="clock-label" id="clock-label">Morning rush</span>
+        </div>
+        <div class="hud-stats">
+          <span class="coins" id="hud-coins">0</span>
+          <span class="stars" id="hud-stars">3.0</span>
+          <button class="icon-btn" id="btn-recipes" aria-label="Recipe book">📖</button>
+          <button class="icon-btn" id="btn-pause" aria-label="Pause"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="3" y="2" width="3.5" height="12" rx="1" fill="currentColor"/><rect x="9.5" y="2" width="3.5" height="12" rx="1" fill="currentColor"/></svg></button>
+        </div>
+      </header>
+
+      <div class="street">
+        <div class="queue" id="queue" aria-label="Guests in line"></div>
+      </div>
+      <div class="awning" aria-hidden="true"></div>
+
+      <div class="counter">
+        <div class="counter-hero" data-hero></div>
+        <div class="workspace">
+          <div class="cup-slot" id="cup-slot" aria-live="polite"></div>
+          <p class="hint" id="hint">Pick a cup to start.</p>
+        </div>
+      </div>
+
+      <div class="stations" id="stations"></div>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    </section>
+
+    <!-- Summary -->
+    <section id="screen-summary" class="screen summary" hidden>
+      <div class="receipt">
+        <h2 id="sum-title">Day 1 closed</h2>
+        <p class="receipt-sub" id="sum-sub"></p>
+        <dl id="sum-lines"></dl>
+        <div class="receipt-total"><span>Profit</span><span id="sum-profit"></span></div>
+        <p class="receipt-rep" id="sum-rep"></p>
+        <button class="btn btn-big" id="btn-to-shop">Spend it</button>
+      </div>
+    </section>
+
+    <!-- Shop -->
+    <section id="screen-shop" class="screen shop" hidden>
+      <div class="chalkboard">
+        <header class="shop-head">
+          <h2>Shack upgrades</h2>
+          <div class="hud-stats"><span class="coins" id="shop-coins">0</span><span class="stars" id="shop-stars">3.0</span></div>
+        </header>
+        <ul class="shop-list" id="shop-list"></ul>
+        <div class="next-loc" id="next-loc"></div>
+        <button class="btn btn-big" id="btn-next-day">Open day 2</button>
+      </div>
+    </section>
+
+    <dialog id="recipes">
+      <h2>Recipe book</h2>
+      <ul id="recipe-list"></ul>
+      <form method="dialog"><button class="btn">Back to the bar</button></form>
+    </dialog>
+
+    <dialog id="paused">
+      <h2>Paused</h2>
+      <p>The line is frozen, patience timers too.</p>
+      <form method="dialog" class="dialog-actions">
+        <button class="btn" value="resume">Resume</button>
+        <button class="btn btn-quiet" value="quit">Quit to title</button>
+      </form>
+    </dialog>
+
+    <div id="loading" class="screen print-bg"><div class="sign"><h1>Pineapple Barista</h1><p id="loading-msg">Warming up the machine</p></div></div>
+  </main>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

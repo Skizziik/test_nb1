@@ -32,6 +32,9 @@
       "tags": [
         "coffee",
         "simple"
+      ],
+      "recipe": [
+        "shot"
       ]
     },
     "americano": {
@@ -42,6 +45,10 @@
       "tags": [
         "coffee",
         "simple"
+      ],
+      "recipe": [
+        "shot",
+        "water"
       ]
     },
     "iced_coffee": {
@@ -53,6 +60,10 @@
         "coffee",
         "iced",
         "simple"
+      ],
+      "recipe": [
+        "shot",
+        "ice"
       ]
     },
     "cappuccino": {
@@ -63,6 +74,11 @@
       "tags": [
         "coffee",
         "milk"
+      ],
+      "recipe": [
+        "shot",
+        "milk",
+        "foam"
       ]
     },
     "latte": {
@@ -72,6 +88,10 @@
       "time_s": 17,
       "tags": [
         "coffee",
+        "milk"
+      ],
+      "recipe": [
+        "shot",
         "milk"
       ]
     },
@@ -83,6 +103,11 @@
       "tags": [
         "coffee",
         "milk"
+      ],
+      "recipe": [
+        "shot",
+        "shot",
+        "milk"
       ]
     },
     "mocha": {
@@ -92,6 +117,11 @@
       "time_s": 20,
       "tags": [
         "coffee",
+        "milk"
+      ],
+      "recipe": [
+        "chocolate",
+        "shot",
         "milk"
       ]
     },
@@ -105,7 +135,11 @@
         "iced",
         "simple"
       ],
-      "requires_upgrade": "cold_brew_tower"
+      "requires_upgrade": "cold_brew_tower",
+      "recipe": [
+        "cold_brew",
+        "ice"
+      ]
     },
     "matcha_latte": {
       "unlock_loc": 3,
@@ -113,6 +147,10 @@
       "cost": 4.0,
       "time_s": 20,
       "tags": [
+        "milk"
+      ],
+      "recipe": [
+        "matcha",
         "milk"
       ]
     },
@@ -124,6 +162,10 @@
       "tags": [
         "coffee",
         "iced"
+      ],
+      "recipe": [
+        "ice_cream",
+        "shot"
       ]
     },
     "pina_colada_latte": {
@@ -136,6 +178,12 @@
         "milk",
         "iced",
         "signature"
+      ],
+      "recipe": [
+        "shot",
+        "milk",
+        "pineapple",
+        "ice"
       ]
     },
     "pour_over": {
@@ -146,6 +194,9 @@
       "tags": [
         "coffee",
         "craft"
+      ],
+      "recipe": [
+        "pour_over"
       ]
     }
   },
@@ -153,17 +204,20 @@
     "size_L": {
       "price_add": 3,
       "time_add_s": 2,
-      "chance": 0.3
+      "chance": 0.3,
+      "sets_size": "L"
     },
     "extra_shot": {
       "price_add": 2,
       "time_add_s": 3,
-      "chance": 0.15
+      "chance": 0.15,
+      "adds_step": "shot"
     },
     "syrup": {
       "price_add": 1.5,
       "time_add_s": 2,
-      "chance": 0.2
+      "chance": 0.2,
+      "adds_step": "syrup"
     },
     "alt_milk": {
       "price_add": 1.5,
@@ -479,6 +533,38 @@
     "critic": {
       "chance": 0.06,
       "rep_weight": 4.0
+    }
+  },
+  "mvp": {
+    "_comment": "What the web MVP actually enables. The simulator ignores this block.",
+    "location": 1,
+    "modifiers": [
+      "size_L",
+      "syrup"
+    ],
+    "customer_types": [
+      "tourist",
+      "local",
+      "student",
+      "office_rush"
+    ],
+    "queue_cap": 5,
+    "minigames": {
+      "grind_s": 1.6,
+      "grind_zone": [
+        0.68,
+        0.9
+      ],
+      "extract_s": 3.0,
+      "extract_zone": [
+        0.72,
+        0.9
+      ],
+      "steam_s": 2.4,
+      "steam_zone": [
+        0.6,
+        0.78
+      ]
     }
   }
 }
