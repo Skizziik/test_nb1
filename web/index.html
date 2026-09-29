@@ -26,7 +26,8 @@
         <button class="btn btn-big" id="btn-new">Open the shack</button>
         <button class="btn btn-quiet" id="btn-reset" hidden>Start over</button>
       </div>
-      <p class="how">Tap a cup, grind, pull a shot, steam milk, then tap the guest to serve. Guests leave when their face turns red.</p>
+      <p class="title-loc" id="title-loc" hidden></p>
+      <p class="how">Pick a cup, grind, pull a shot, add what the order needs, then tap the guest to serve. Glowing buttons show the next step on your first days.</p>
     </section>
 
     <!-- Shift -->
@@ -41,6 +42,8 @@
         <div class="hud-stats">
           <span class="coins" id="hud-coins">0</span>
           <span class="stars" id="hud-stars">3.0</span>
+          <button class="icon-btn" id="btn-hints" aria-label="Hints" aria-pressed="true">💡</button>
+          <button class="icon-btn" id="btn-sound" aria-label="Sound" aria-pressed="true">🔊</button>
           <button class="icon-btn" id="btn-recipes" aria-label="Recipe book">📖</button>
           <button class="icon-btn" id="btn-pause" aria-label="Pause"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="3" y="2" width="3.5" height="12" rx="1" fill="currentColor"/><rect x="9.5" y="2" width="3.5" height="12" rx="1" fill="currentColor"/></svg></button>
         </div>
@@ -79,7 +82,7 @@
     <section id="screen-shop" class="screen shop" hidden>
       <div class="chalkboard">
         <header class="shop-head">
-          <h2>Shack upgrades</h2>
+          <h2 id="shop-head-title">Shack upgrades</h2>
           <div class="hud-stats"><span class="coins" id="shop-coins">0</span><span class="stars" id="shop-stars">3.0</span></div>
         </header>
         <ul class="shop-list" id="shop-list"></ul>
@@ -101,6 +104,18 @@
         <button class="btn" value="resume">Resume</button>
         <button class="btn btn-quiet" value="quit">Quit to title</button>
       </form>
+    </dialog>
+
+    <dialog id="finale">
+      <h2>Pineapple Roastery</h2>
+      <p id="finale-text"></p>
+      <form method="dialog"><button class="btn">Keep brewing</button></form>
+    </dialog>
+
+    <dialog id="moved">
+      <h2 id="moved-title"></h2>
+      <p id="moved-text"></p>
+      <form method="dialog"><button class="btn">Let's go</button></form>
     </dialog>
 
     <div id="loading" class="screen print-bg"><div class="sign"><h1>Pineapple Barista</h1><p id="loading-msg">Warming up the machine</p></div></div>

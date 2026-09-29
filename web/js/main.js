@@ -1,7 +1,8 @@
 import {
-  SAVE_KEY, newSave, eff, Shift, requiredFor, orderPrice, menuFor,
-  shopList, buy, nextLocation, clamp,
+  SAVE_KEY, newSave, migrateSave, eff, Shift, requiredFor, orderPrice, menuFor,
+  shopList, buy, nextLocation, canRelocate, relocate, nextHint, stepsNeeded, clamp,
 } from "./engine.js";
+import { sfx } from "./audio.js";
 
 // ------------------------------------------------------------------ text
 
@@ -17,6 +18,12 @@ const STEP_ICON = {
 };
 const STEP_NAME = {
   shot: "Espresso shot", water: "Hot water", ice: "Ice", milk: "Steamed milk", foam: "Foam", syrup: "Vanilla syrup",
+  chocolate: "Chocolate", cold_brew: "Cold brew", matcha: "Matcha", ice_cream: "Ice cream", pineapple: "Pineapple", pour_over: "Pour over",
+};
+const LOC_INTRO = {
+  2: "Wooden planks, a Ferris wheel and way more foot traffic. New on the menu: flat white, mocha, extra shots. Connoisseurs start showing up.",
+  3: "Stone streets, office crowds and people who judge your crema. New: matcha, affogato and the signature pina colada latte.",
+  4: "",
 };
 const GUEST = {
   tourist: { label: "Tourist", face: "😎" },
@@ -102,7 +109,7 @@ function loadSave() {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
     const s = JSON.parse(raw);
-    return s && s.version === 1 ? s : null;
+    return s && s.version === 1 ? migrateSave(bal, s) : null;
   } catch { return null; }
 }
 
@@ -151,33 +158,45 @@ function zoneQuality(x, [a, b]) {
 }
 
 function stationDefs() {
-  const m = bal.mvp.minigames;
+  const m = bal.web.minigames;
   const coffeeGrind = eff(bal, save, "grinder", "time_mult_coffee", 1);
   const coffeeShot = eff(bal, save, "espresso_machine", "time_mult_coffee", 1);
   const milkMult = eff(bal, save, "milk_steamer", "time_mult_milk", 1);
   const iceMult = eff(bal, save, "ice_machine", "time_mult_iced", 1);
-  return [
+  const all = [
     { id: "cupM", kind: "tap", ico: "🥤", lbl: "Cup M", sub: "regular", act: () => shift.takeCup("M") },
-    { id: "cupL", kind: "tap", ico: "🥤", lbl: "Cup L", sub: "large", big: true, act: () => shift.takeCup("L") },
-    { id: "grind", kind: "hold", ico: "🫘", lbl: "Grinder", sub: "hold, let go in green",
+    { id: "cupL", kind: "tap", ico: "🥤", lbl: "Cup L", sub: "large", act: () => shift.takeCup("L") },
+    { id: "grind", kind: "hold", sound: "grind", ico: "🫘", lbl: "Grinder", sub: "hold, let go in green",
       dur: m.grind_s * coffeeGrind, zone: m.grind_zone,
       canStart: () => shift.grounds === null || "The portafilter is already loaded.",
       done: (x) => (x < 0.15 ? { ok: false, msg: "Hold the grinder a bit longer." } : shift.loadGrounds(zoneQuality(x, m.grind_zone))) },
-    { id: "shot", kind: "toggle", ico: "☕", lbl: "Espresso", sub: "tap start, tap stop",
+    { id: "shot", kind: "toggle", sound: "steam", ico: "☕", lbl: "Espresso", sub: "tap start, tap stop",
       dur: m.extract_s * coffeeShot, zone: m.extract_zone,
       canStart: () => shift.grounds !== null || "Grind coffee first.",
       done: (x) => shift.pullShot(x >= 1 ? 0.2 : zoneQuality(x, m.extract_zone)) },
-    { id: "milk", kind: "hold", ico: "🥛", lbl: "Steam milk", sub: "hold, let go in green",
+    { id: "milk", step: "milk", kind: "hold", sound: "steam", ico: "🥛", lbl: "Steam milk", sub: "hold, let go in green",
       dur: m.steam_s * milkMult, zone: m.steam_zone,
       done: (x) => (x < 0.15 ? { ok: false, msg: "Hold the steamer a bit longer." } : shift.addStep("milk", x >= 1 ? 0.2 : zoneQuality(x, m.steam_zone))) },
-    { id: "foam", kind: "timed", ico: "☁️", lbl: "Foam", sub: "on top of milk", dur: 0.6,
+    { id: "foam", step: "foam", kind: "timed", ico: "☁️", lbl: "Foam", sub: "on top of milk", dur: 0.6,
       canStart: () => (shift.cup && shift.cup.steps.includes("milk")) || "Steam milk before adding foam.",
       done: () => shift.addStep("foam") },
-    { id: "water", kind: "timed", ico: "💧", lbl: "Hot water", sub: "for americano", dur: 0.8, done: () => shift.addStep("water") },
-    { id: "ice", kind: "timed", ico: "🧊", lbl: "Ice", sub: "for iced drinks", dur: 1.2 * iceMult, done: () => shift.addStep("ice") },
-    { id: "syrup", kind: "timed", ico: "🍯", lbl: "Syrup", sub: "vanilla", dur: 0.5, done: () => shift.addStep("syrup") },
+    { id: "water", step: "water", kind: "timed", ico: "💧", lbl: "Hot water", sub: "for americano", dur: 0.8, done: () => shift.addStep("water") },
+    { id: "ice", step: "ice", kind: "timed", ico: "🧊", lbl: "Ice", sub: "for iced drinks", dur: 1.2 * iceMult, done: () => shift.addStep("ice") },
+    { id: "syrup", step: "syrup", kind: "timed", ico: "🍯", lbl: "Syrup", sub: "vanilla", dur: 0.5, done: () => shift.addStep("syrup") },
+    { id: "chocolate", step: "chocolate", kind: "timed", ico: "🍫", lbl: "Chocolate", sub: "for mocha", dur: 0.6, done: () => shift.addStep("chocolate") },
+    { id: "cold_brew", step: "cold_brew", kind: "timed", ico: "🫙", lbl: "Cold brew", sub: "from the tower", dur: 0.8, done: () => shift.addStep("cold_brew") },
+    { id: "matcha", step: "matcha", kind: "hold", sound: "grind", ico: "🍵", lbl: "Matcha", sub: "hold to whisk",
+      dur: m.whisk_s, zone: m.whisk_zone,
+      done: (x) => (x < 0.15 ? { ok: false, msg: "Whisk a bit longer." } : shift.addStep("matcha", x >= 1 ? 0.3 : zoneQuality(x, m.whisk_zone))) },
+    { id: "ice_cream", step: "ice_cream", kind: "timed", ico: "🍨", lbl: "Ice cream", sub: "one scoop", dur: 0.8, done: () => shift.addStep("ice_cream") },
+    { id: "pineapple", step: "pineapple", kind: "timed", ico: "🍍", lbl: "Pineapple", sub: "house syrup", dur: 0.6, done: () => shift.addStep("pineapple") },
+    { id: "pour_over", step: "pour_over", kind: "toggle", ico: "⏳", lbl: "Pour over", sub: "tap start, tap stop",
+      dur: m.pour_s, zone: m.pour_zone,
+      done: (x) => shift.addStep("pour_over", x >= 1 ? 0.3 : zoneQuality(x, m.pour_zone)) },
     { id: "trash", kind: "tap", ico: "🗑️", lbl: "Trash", sub: "start over", act: () => shift.trash(), cls: "trash" },
   ];
+  const need = stepsNeeded(bal, save);
+  return all.filter((s) => !s.step || need.has(s.step));
 }
 
 let stations = [];
@@ -186,6 +205,7 @@ function buildStations() {
   const host = $("stations");
   host.innerHTML = "";
   stations = stationDefs();
+  host.classList.toggle("many", stations.length > 12);
   for (const s of stations) {
     const b = document.createElement("button");
     b.className = "station" + (s.cls ? " " + s.cls : "");
@@ -213,6 +233,9 @@ function startMg(s) {
   if (ok !== true) { toast(ok); return; }
   st.active = true;
   st.x = 0;
+  st.cup = shift.cup;
+  if (s.sound) sfx.startLoop(s.id, s.sound); else sfx.click();
+  hero?.set("work");
 }
 function endMg(s) {
   const st = mg[s.id];
@@ -220,12 +243,24 @@ function endMg(s) {
   st.active = false;
   const x = st.x;
   st.x = 0;
-  result(s.done(x));
+  sfx.stopLoop(s.id);
+  // the drink this action was started for was served or trashed meanwhile
+  if (st.cup && shift.cup !== st.cup) { st.cup = null; return; }
+  st.cup = null;
+  const r = s.done(x);
+  if (r && r.ok !== false) { if (s.kind === "timed") sfx.pour(); else sfx.click(); }
+  result(r);
+  if (!Object.values(mg).some((v) => v.active)) hero?.set("idle");
 }
 
 function wireStation(b, s) {
   if (s.kind === "tap") {
-    b.addEventListener("click", () => { if (running) result(s.act()); });
+    b.addEventListener("click", () => {
+      if (!running) return;
+      const r = s.act();
+      if (r && r.ok !== false) sfx.click();
+      result(r);
+    });
     return;
   }
   if (s.kind === "timed" || s.kind === "toggle") {
@@ -296,7 +331,7 @@ function addGuest(c) {
   const b = document.createElement("button");
   b.className = "guest" + (c.critic ? " critic" : "");
   b.setAttribute("aria-label", `${GUEST[c.type].label} wants ${DRINK_NAMES[c.drinkId]}. Serve.`);
-  b.innerHTML = `<div class="order">${orderHTML(c)}</div><div class="face"><span>${GUEST[c.type].face}</span></div><span class="guest-type">${c.critic ? "Critic" : GUEST[c.type].label}</span>`;
+  b.innerHTML = `<div class="order">${orderHTML(c)}</div><div class="face"><span>${GUEST[c.type].face}</span></div><span class="guest-type">${c.critic ? "Critic" : GUEST[c.type].label}</span><span class="helper-badge">Helper on it</span>`;
   b.addEventListener("click", () => serveGuest(c.id, b));
   $("queue").appendChild(b);
   guestEls.set(c.id, b);
@@ -316,8 +351,11 @@ function serveGuest(id, el) {
   if (!r.ok) { toast(r.msg); return; }
   if (r.correct) {
     pop(el, `+${money(r.price + r.tip)} 🪙`);
-    if (r.quality >= 0.9) heroHappy();
+    if (r.quality >= 0.9) { sfx.perfect(); hero?.set("happy", 1400); heroHappy(); }
+    else sfx.coin();
   } else {
+    sfx.bad();
+    hero?.set("sad", 1400);
     pop(el, "Wrong order", true);
     toast("That wasn't their order. They paid, but no tip and a bad review.");
   }
@@ -328,6 +366,7 @@ function tickGuests() {
   for (const c of shift.customers) {
     const el = guestEls.get(c.id);
     if (!el) continue;
+    el.classList.toggle("helper-on", shift.helperOn(c));
     const p = shift.patienceLeft(c);
     const face = el.querySelector(".face");
     face.style.setProperty("--p", p.toFixed(3));
@@ -338,15 +377,24 @@ function tickGuests() {
 
 function drainLog() {
   for (const e of shift.log.splice(0)) {
-    if (e.type === "arrive") addGuest(e.cust);
+    if (e.type === "arrive") { addGuest(e.cust); sfx.bell(); }
     else if (e.type === "leave") {
       if (e.reason === "full") toast("A guest saw the long line and walked away.");
       else {
         const el = guestEls.get(e.cust.id);
         if (el) pop(el, "Left", true);
+        hero?.set("sad", 1200);
+      }
+      sfx.leave();
+      removeGuest(e.cust.id);
+    } else if (e.type === "served") {
+      if (e.byHelper) {
+        const el = guestEls.get(e.cust.id);
+        if (el) pop(el, e.correct ? `+${money(e.price + e.tip)} 🪙` : "Helper slipped", !e.correct);
+        if (e.correct) sfx.coin(); else sfx.bad();
       }
       removeGuest(e.cust.id);
-    } else if (e.type === "served") removeGuest(e.cust.id);
+    }
   }
 }
 
@@ -357,6 +405,64 @@ function tickHud() {
     shift.phase === "rush" ? "Morning rush" : shift.phase === "day" ? "Afternoon" : "Closed: serve the last guests";
   $("hud-coins").textContent = money(save.coins + shift.res.revenue + shift.res.tips);
   $("hud-stars").textContent = save.rep.toFixed(1);
+}
+
+// ------------------------------------------------------------------ coach
+
+function hintsOn() {
+  return save.settings.hints;
+}
+
+let lastHintKey = "";
+function tickCoach() {
+  let key = "";
+  const focus = shift.customers.find((c) => !shift.helperOn(c));
+  if (hintsOn() && focus) {
+    const h = nextHint(shift, focus);
+    key = h.guest ? `g${h.guest}` : `s${h.station}`;
+  }
+  if (focus && hero) {
+    const el = guestEls.get(focus.id);
+    const q = $("queue").getBoundingClientRect();
+    if (el && q.width) {
+      const r = el.getBoundingClientRect();
+      hero.look(((r.left + r.width / 2) - (q.left + q.width / 2)) / (q.width / 2) * -0.8);
+    }
+  }
+  if (key === lastHintKey) return;
+  lastHintKey = key;
+  for (const el of document.querySelectorAll(".hint-glow")) el.classList.remove("hint-glow");
+  if (!key) return;
+  if (key[0] === "g") guestEls.get(Number(key.slice(1)))?.classList.add("hint-glow");
+  else document.querySelector(`.station[data-id="${key.slice(1)}"]`)?.classList.add("hint-glow");
+}
+
+function syncToggles() {
+  $("btn-hints").setAttribute("aria-pressed", String(save.settings.hints));
+  $("btn-hints").classList.toggle("off", !save.settings.hints);
+  $("btn-sound").setAttribute("aria-pressed", String(save.settings.sound));
+  $("btn-sound").textContent = save.settings.sound ? "🔊" : "🔇";
+  sfx.setEnabled(save.settings.sound);
+}
+
+// ------------------------------------------------------------------ 3D hero
+
+let hero = null;
+
+async function initHero() {
+  const { HeroView, webglAvailable } = await import("./hero3d.bundle.js");
+  if (!webglAvailable()) return;
+  hero = new HeroView();
+  window.addEventListener("resize", () => hero.resize());
+}
+
+function mountHero(where) {
+  const el = document.querySelector(where === "full" ? "#screen-title [data-hero]" : "#screen-shift [data-hero]");
+  if (hero && el) { el.classList.add("is-3d"); hero.mount(el, where); }
+}
+
+function applyTheme() {
+  document.body.dataset.loc = String(save.loc);
 }
 
 // ------------------------------------------------------------------ loop
@@ -371,6 +477,7 @@ function frame(ts) {
     tickStations(dt);
     tickGuests();
     tickHud();
+    tickCoach();
     if (!shift.cup) renderCup();
     if (shift.done) { endShift(); return; }
   }
@@ -378,16 +485,22 @@ function frame(ts) {
 }
 
 function startShift() {
+  sfx.unlock();
+  applyTheme();
   shift = new Shift(bal, save);
+  lastHintKey = "";
   guestEls.clear();
   $("queue").innerHTML = "";
   buildStations();
   $("hud-day").textContent = `Day ${save.day}`;
+  $("hud-day").title = bal.locations[String(save.loc)].name;
   $("clock-rush").style.width = `${bal.shift.rush_window[1] * 100}%`;
   const ev = shift.event.name;
   $("hud-event").hidden = !ev;
   if (ev) $("hud-event").textContent = EVENT_NAME[ev];
   show("screen-shift");
+  mountHero("bust");
+  syncToggles();
   renderCup();
   tickHud();
   if (ev) toast(EVENT_INTRO[ev]);
@@ -398,7 +511,11 @@ function startShift() {
 
 function endShift() {
   running = false;
+  for (const k of Object.keys(mg)) sfx.stopLoop(k);
+  const wrong = shift.res.wrong || 0;
   const s = shift.finish();
+  if (save.day === bal.web.hint_days + 1 && save.settings.hints && !save.settings.hintsTouched) save.settings.hints = false;
+  sfx.fanfare();
   shift = null;
   persist();
   $("sum-title").textContent = `Day ${s.day} closed`;
@@ -406,6 +523,7 @@ function endShift() {
   const lines = [
     ["Guests served", s.served],
     ["Guests who left", s.walkouts],
+    ["Wrong orders", wrong],
     ["Perfect drinks", s.perfect],
     ["Sales", money(s.revenue)],
     ["Tips", money(s.tips)],
@@ -453,11 +571,34 @@ function renderShop() {
   const nx = nextLocation(bal, save);
   const box = $("next-loc");
   if (nx) {
-    const ready = save.rep >= nx.min_stars && save.coins >= nx.move_cost;
-    box.innerHTML = ready
-      ? `<b>${nx.name}</b> would take you now. Moving opens in a later update, keep the coins.`
-      : `Next spot: <b>${nx.name}</b>. Needs ${nx.min_stars} stars and ${money(nx.move_cost)} coins. Moving opens in a later update.`;
-  } else box.textContent = "";
+    const starsOk = save.rep >= nx.min_stars;
+    const coinsOk = save.coins >= nx.move_cost;
+    const reqs = `<span class="${starsOk ? "up" : "down"}">${nx.min_stars} ⭐</span> and <span class="${coinsOk ? "up" : "down"}">${money(nx.move_cost)} 🪙</span>`;
+    box.innerHTML = canRelocate(bal, save)
+      ? `<p><b>${nx.name}</b> is ready for you. Rent there is ${nx.rent_per_day} a day, guests pay more.</p><button class="btn" id="btn-move">Move for ${money(nx.move_cost)}</button>`
+      : `<p>Next spot: <b>${nx.name}</b>. You need ${reqs}. Upgrades move with you.</p>`;
+    $("btn-move")?.addEventListener("click", () => {
+      if (!relocate(bal, save)) return;
+      persist();
+      applyTheme();
+      sfx.fanfare();
+      const L = bal.locations[String(save.loc)];
+      if (save.loc === 4) {
+        $("finale-text").textContent = `Day ${save.day}. You started with a beach shack and ${bal.shift.start_coins} coins, and now the roastery has your name on it. ${money(save.stats.served)} drinks served so far. The line never ends, so keep brewing.`;
+        save.seenFinale = true;
+        persist();
+        $("finale").showModal();
+      } else {
+        $("moved-title").textContent = L.name;
+        $("moved-text").textContent = LOC_INTRO[save.loc];
+        $("moved").showModal();
+      }
+      renderShop();
+    });
+  } else {
+    box.innerHTML = `<p><b>Pineapple Roastery</b> is yours. Served so far: ${money(save.stats.served)}. Best day: ${money(save.stats.bestDay)} 🪙.</p>`;
+  }
+  $("shop-head-title").textContent = `${bal.locations[String(save.loc)].name} upgrades`;
   $("btn-next-day").textContent = `Open day ${save.day}`;
 }
 
@@ -485,7 +626,11 @@ function renderTitle() {
   if (has) $("btn-continue").textContent = `Continue day ${save.day}`;
   $("btn-new").textContent = has ? "Open today's shift" : "Open the shack";
   $("btn-new").hidden = has;
+  $("title-loc").hidden = !has;
+  if (has) $("title-loc").textContent = `${bal.locations[String(save.loc)].name}, ${save.rep.toFixed(1)} ⭐, ${money(save.coins)} 🪙`;
+  applyTheme();
   show("screen-title");
+  mountHero("full");
 }
 
 async function loadBalance() {
@@ -507,7 +652,18 @@ async function boot() {
     return;
   }
   save = loadSave() || newSave(bal);
+  try { await initHero(); } catch { hero = null; /* SVG hero stays as a fallback */ }
   $("loading").remove();
+  syncToggles();
+  $("btn-hints").addEventListener("click", () => {
+    save.settings.hints = !save.settings.hints;
+    save.settings.hintsTouched = true;
+    persist(); syncToggles(); lastHintKey = "x";
+  });
+  $("btn-sound").addEventListener("click", () => {
+    save.settings.sound = !save.settings.sound;
+    persist(); syncToggles();
+  });
 
   $("btn-new").addEventListener("click", startShift);
   $("btn-continue").addEventListener("click", startShift);
