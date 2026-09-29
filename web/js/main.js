@@ -46,7 +46,7 @@ const UPGRADE_TEXT = {
   milk_steamer: ["Milk steamer", "Milk heats up faster."],
   ice_machine: ["Ice machine", "Ice drops in faster."],
   cold_brew_tower: ["Cold brew tower", "Adds cold brew to the menu."],
-  decor: ["Beach decor", "Brings more guests, and they wait longer."],
+  decor: ["Decor", "Brings more guests, and they wait longer."],
   menu_board: ["Menu board", "Guests accept higher prices."],
   pos_tablet: ["Order tablet", "Shows the full recipe above every order."],
   loyalty_cards: ["Loyalty cards", "Guests leave a bit happier."],
@@ -117,7 +117,8 @@ function show(id) {
   for (const el of document.querySelectorAll(".screen")) el.hidden = el.id !== id;
 }
 
-function money(x) { return Math.round(x).toLocaleString("en-US"); }
+function money(x) { return Math.abs(Math.round(x)).toLocaleString("en-US"); }
+function signed(x) { return (Math.round(x) < 0 ? "-" : "") + money(x); }
 
 let toastTimer = 0;
 function toast(msg) {
@@ -403,7 +404,7 @@ function tickHud() {
   $("clock-fill").style.width = `${f * 100}%`;
   $("clock-label").textContent =
     shift.phase === "rush" ? "Morning rush" : shift.phase === "day" ? "Afternoon" : "Closed: serve the last guests";
-  $("hud-coins").textContent = money(save.coins + shift.res.revenue + shift.res.tips);
+  $("hud-coins").textContent = signed(save.coins + shift.res.revenue + shift.res.tips);
   $("hud-stars").textContent = save.rep.toFixed(1);
 }
 
@@ -527,12 +528,12 @@ function endShift() {
     ["Perfect drinks", s.perfect],
     ["Sales", money(s.revenue)],
     ["Tips", money(s.tips)],
-    ["Ingredients", `-${money(s.ingredients)}`],
+    ["Ingredients", s.ingredients >= 0.5 ? `-${money(s.ingredients)}` : "0"],
     ["Rent", `-${money(s.rent)}`],
   ];
   if (s.wage) lines.push(["Helper wage", `-${money(s.wage)}`]);
   $("sum-lines").innerHTML = lines.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
-  $("sum-profit").textContent = `${s.profit >= 0 ? "+" : ""}${money(s.profit)} 🪙`;
+  $("sum-profit").textContent = `${Math.round(s.profit) >= 0 ? "+" : "-"}${money(s.profit)} 🪙`;
   const d = s.repAfter - s.repBefore;
   const cls = d >= 0 ? "up" : "down";
   $("sum-rep").innerHTML = `Rating ${s.repAfter.toFixed(2)} ⭐ <span class="${cls}">${d >= 0 ? "▲" : "▼"} ${Math.abs(d).toFixed(2)}</span>`;
@@ -542,7 +543,7 @@ function endShift() {
 // ------------------------------------------------------------------ shop
 
 function renderShop() {
-  $("shop-coins").textContent = money(save.coins);
+  $("shop-coins").textContent = signed(save.coins);
   $("shop-stars").textContent = save.rep.toFixed(1);
   const list = $("shop-list");
   list.innerHTML = "";
@@ -627,7 +628,7 @@ function renderTitle() {
   $("btn-new").textContent = has ? "Open today's shift" : "Open the shack";
   $("btn-new").hidden = has;
   $("title-loc").hidden = !has;
-  if (has) $("title-loc").textContent = `${bal.locations[String(save.loc)].name}, ${save.rep.toFixed(1)} ⭐, ${money(save.coins)} 🪙`;
+  if (has) $("title-loc").textContent = `${bal.locations[String(save.loc)].name}, ${save.rep.toFixed(1)} ⭐, ${signed(save.coins)} 🪙`;
   applyTheme();
   show("screen-title");
   mountHero("full");
