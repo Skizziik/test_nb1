@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+# engine / build output (fill in once the engine is chosen)
+Build/
+Builds/
+Library/
+Temp/
+node_modules/
+dist/
+# large raw 3D sources (use Git LFS if you want them in the repo)
+*.blend1
