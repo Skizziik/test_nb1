@@ -1,0 +1,15 @@
+{
+  "name": "pineapple-barista",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/hero3d.js --bundle --format=esm --minify --outfile=web/js/hero3d.bundle.js && esbuild tools/hero_export/entry.js --bundle --format=iife --global-name=HeroExport --minify --outfile=tools/hero_export/bundle.js",
+    "export-glb": "python3 tools/hero_export/export.py",
+    "test": "node tests/engine.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "three": "^0.186.1"
+  }
+}

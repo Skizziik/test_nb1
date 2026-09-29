@@ -11,3 +11,5 @@ node_modules/
 dist/
 # large raw 3D sources (use Git LFS if you want them in the repo)
 *.blend1
+node_modules/
+tools/hero_export/bundle.js
