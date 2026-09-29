@@ -12,22 +12,23 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <canvas id="world" aria-hidden="true"></canvas>
+  <div id="overlay"></div>
   <main id="app">
 
     <!-- Title -->
-    <section id="screen-title" class="screen print-bg" hidden>
+    <section id="screen-title" class="screen title-over" hidden>
       <div class="sign">
         <h1>Pineapple Barista</h1>
         <p>A coffee shack on the beach. Your shirt is loud, your espresso is louder.</p>
       </div>
-      <div class="title-hero" data-hero></div>
       <div class="title-actions">
         <button class="btn btn-big" id="btn-continue" hidden></button>
         <button class="btn btn-big" id="btn-new">Open the shack</button>
         <button class="btn btn-quiet" id="btn-reset" hidden>Start over</button>
       </div>
       <p class="title-loc" id="title-loc" hidden></p>
-      <p class="how">Pick a cup, grind, pull a shot, add what the order needs, then tap the guest to serve. Glowing buttons show the next step on your first days.</p>
+      <p class="how">Pick a cup, grind, pull a shot, add what the order needs, then tap the guest or their order bubble to serve. Glowing buttons show the next step on your first days.</p>
     </section>
 
     <!-- Shift -->
@@ -49,21 +50,15 @@
         </div>
       </header>
 
-      <div class="street">
-        <div class="queue" id="queue" aria-label="Guests in line"></div>
-      </div>
-      <div class="awning" aria-hidden="true"></div>
-
-      <div class="counter">
-        <div class="counter-hero" data-hero></div>
-        <div class="workspace">
+      <div class="stage" id="stage">
+        <div class="cup-panel">
           <div class="cup-slot" id="cup-slot" aria-live="polite"></div>
           <p class="hint" id="hint">Pick a cup to start.</p>
         </div>
+        <div class="toast" id="toast" role="status" aria-live="polite"></div>
       </div>
 
       <div class="stations" id="stations"></div>
-      <div class="toast" id="toast" role="status" aria-live="polite"></div>
     </section>
 
     <!-- Summary -->

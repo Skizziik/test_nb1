@@ -98,6 +98,7 @@ let save = null;
 let shift = null;
 let running = false;
 let lastFrame = 0;
+let world = null;
 const guestEls = new Map();
 const mg = {}; // minigame state per station id
 
@@ -130,6 +131,7 @@ function toast(msg) {
 }
 
 function pop(anchor, text, bad = false) {
+  if (world) return popFixed(anchor, text, bad);
   const host = $("screen-shift");
   const a = anchor.getBoundingClientRect();
   const h = host.getBoundingClientRect();
@@ -148,6 +150,17 @@ function heroHappy() {
   el.classList.remove("hero-happy");
   void el.getBoundingClientRect();
   el.classList.add("hero-happy");
+}
+
+function popFixed(anchor, text, bad) {
+  const a = anchor.getBoundingClientRect();
+  const el = document.createElement("div");
+  el.className = "pop" + (bad ? " bad" : "");
+  el.textContent = text;
+  el.style.left = `${a.left + a.width / 2}px`;
+  el.style.top = `${a.top}px`;
+  $("overlay").appendChild(el);
+  setTimeout(() => el.remove(), 1000);
 }
 
 // ------------------------------------------------------------------ stations
@@ -237,6 +250,7 @@ function startMg(s) {
   st.cup = shift.cup;
   if (s.sound) sfx.startLoop(s.id, s.sound); else sfx.click();
   hero?.set("work");
+  world?.setStation(s.id, true);
 }
 function endMg(s) {
   const st = mg[s.id];
@@ -245,6 +259,7 @@ function endMg(s) {
   const x = st.x;
   st.x = 0;
   sfx.stopLoop(s.id);
+  world?.setStation(s.id, false);
   // the drink this action was started for was served or trashed meanwhile
   if (st.cup && shift.cup !== st.cup) { st.cup = null; return; }
   st.cup = null;
@@ -258,6 +273,7 @@ function wireStation(b, s) {
   if (s.kind === "tap") {
     b.addEventListener("click", () => {
       if (!running) return;
+      world?.pulse(s.id);
       const r = s.act();
       if (r && r.ok !== false) sfx.click();
       result(r);
@@ -334,7 +350,9 @@ function addGuest(c) {
   b.setAttribute("aria-label", `${GUEST[c.type].label} wants ${DRINK_NAMES[c.drinkId]}. Serve.`);
   b.innerHTML = `<div class="order">${orderHTML(c)}</div><div class="face"><span>${GUEST[c.type].face}</span></div><span class="guest-type">${c.critic ? "Critic" : GUEST[c.type].label}</span><span class="helper-badge">Helper on it</span>`;
   b.addEventListener("click", () => serveGuest(c.id, b));
-  $("queue").appendChild(b);
+  b.classList.add("bubble");
+  b.style.opacity = "0";
+  $("overlay").appendChild(b);
   guestEls.set(c.id, b);
 }
 
@@ -350,6 +368,8 @@ function serveGuest(id, el) {
   if (!running) return;
   const r = shift.serve(id);
   if (!r.ok) { toast(r.msg); return; }
+  world?.serveTo(id);
+  setTimeout(() => world?.leave(id, true), 380);
   if (r.correct) {
     pop(el, `+${money(r.price + r.tip)} 🪙`);
     if (r.quality >= 0.9) { sfx.perfect(); hero?.set("happy", 1400); heroHappy(); }
@@ -364,9 +384,18 @@ function serveGuest(id, el) {
 }
 
 function tickGuests() {
+  world?.syncGuests(shift.customers);
   for (const c of shift.customers) {
     const el = guestEls.get(c.id);
     if (!el) continue;
+    const sp = world?.screenPos(c.id);
+    if (sp && sp.visible) {
+      const half = (el.offsetWidth || 100) / 2 + 4;
+      const x = clamp(sp.x, half, window.innerWidth - half);
+      const y = clamp(sp.y, (el.offsetHeight || 80) + 56, window.innerHeight);
+      el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -100%)`;
+      if (el.style.opacity === "0") el.style.opacity = "1";
+    }
     el.classList.toggle("helper-on", shift.helperOn(c));
     const p = shift.patienceLeft(c);
     const face = el.querySelector(".face");
@@ -385,11 +414,13 @@ function drainLog() {
         const el = guestEls.get(e.cust.id);
         if (el) pop(el, "Left", true);
         hero?.set("sad", 1200);
+        world?.leave(e.cust.id, false);
       }
       sfx.leave();
       removeGuest(e.cust.id);
     } else if (e.type === "served") {
       if (e.byHelper) {
+        world?.leave(e.cust.id, true);
         const el = guestEls.get(e.cust.id);
         if (el) pop(el, e.correct ? `+${money(e.price + e.tip)} 🪙` : "Helper slipped", !e.correct);
         if (e.correct) sfx.coin(); else sfx.bad();
@@ -424,10 +455,10 @@ function tickCoach() {
   }
   if (focus && hero) {
     const el = guestEls.get(focus.id);
-    const q = $("queue").getBoundingClientRect();
-    if (el && q.width) {
+    if (el) {
       const r = el.getBoundingClientRect();
-      hero.look(((r.left + r.width / 2) - (q.left + q.width / 2)) / (q.width / 2) * -0.8);
+      const half = window.innerWidth / 2;
+      hero.look(((r.left + r.width / 2) - half) / half * -0.8);
     }
   }
   if (key === lastHintKey) return;
@@ -446,42 +477,64 @@ function syncToggles() {
   sfx.setEnabled(save.settings.sound);
 }
 
-// ------------------------------------------------------------------ 3D hero
+// ------------------------------------------------------------------ 3D world
 
 let hero = null;
 
-async function initHero() {
-  const { HeroView, webglAvailable } = await import("./hero3d.bundle.js");
-  if (!webglAvailable()) return;
-  hero = new HeroView();
-  window.addEventListener("resize", () => hero.resize());
+async function initWorld() {
+  const { World } = await import("./world.bundle.js");
+  world = new World($("world"));
+  await world.init();
+  world.setLocation(save.loc);
+  hero = { set: (st, ms) => world.heroSet(st, ms), look: (x) => world.heroLook(x) };
 }
 
-function mountHero(where) {
-  const el = document.querySelector(where === "full" ? "#screen-title [data-hero]" : "#screen-shift [data-hero]");
-  if (hero && el) { el.classList.add("is-3d"); hero.mount(el, where); }
-}
+function mountHero() { /* the hero lives in the 3D world now */ }
 
 function applyTheme() {
   document.body.dataset.loc = String(save.loc);
+  world?.setLocation(save.loc);
+}
+
+function layoutStage() {
+  const r = $("stage").getBoundingClientRect();
+  world.setStage(r.top, r.height);
+}
+
+function toWorldMode(mode) {
+  if (!world) return;
+  world.setMode(mode);
+  if (mode === "shift") layoutStage(); else world.resize();
+}
+
+function clearGuests() {
+  for (const el of guestEls.values()) el.remove();
+  guestEls.clear();
+  world?.clearGuests();
+  world?.syncCup(null);
 }
 
 // ------------------------------------------------------------------ loop
 
 function frame(ts) {
-  if (!shift) return;
-  const dt = Math.min(0.1, (ts - lastFrame) / 1000) * SPEED;
+  const real = Math.min(0.1, (ts - lastFrame) / 1000 || 0);
   lastFrame = ts;
-  if (running) {
+  if (shift && running) {
+    const dt = real * SPEED;
     shift.update(dt);
     drainLog();
     tickStations(dt);
     tickGuests();
     tickHud();
     tickCoach();
+    world.syncCup(shift.cup);
     if (!shift.cup) renderCup();
-    if (shift.done) { endShift(); return; }
+    if (shift.done) endShift();
+  } else if (shift) {
+    tickGuests();
   }
+  world.update(real);
+  world.render();
   requestAnimationFrame(frame);
 }
 
@@ -490,8 +543,7 @@ function startShift() {
   applyTheme();
   shift = new Shift(bal, save);
   lastHintKey = "";
-  guestEls.clear();
-  $("queue").innerHTML = "";
+  clearGuests();
   buildStations();
   $("hud-day").textContent = `Day ${save.day}`;
   $("hud-day").title = bal.locations[String(save.loc)].name;
@@ -500,14 +552,12 @@ function startShift() {
   $("hud-event").hidden = !ev;
   if (ev) $("hud-event").textContent = EVENT_NAME[ev];
   show("screen-shift");
-  mountHero("bust");
+  toWorldMode("shift");
   syncToggles();
   renderCup();
   tickHud();
   if (ev) toast(EVENT_INTRO[ev]);
   running = true;
-  lastFrame = performance.now();
-  requestAnimationFrame(frame);
 }
 
 function endShift() {
@@ -519,6 +569,8 @@ function endShift() {
   sfx.fanfare();
   shift = null;
   persist();
+  clearGuests();
+  toWorldMode("title");
   $("sum-title").textContent = `Day ${s.day} closed`;
   $("sum-sub").textContent = s.event ? EVENT_NAME[s.event] : bal.locations[String(save.loc)].name;
   const lines = [
@@ -631,7 +683,7 @@ function renderTitle() {
   if (has) $("title-loc").textContent = `${bal.locations[String(save.loc)].name}, ${save.rep.toFixed(1)} ⭐, ${signed(save.coins)} 🪙`;
   applyTheme();
   show("screen-title");
-  mountHero("full");
+  toWorldMode("title");
 }
 
 async function loadBalance() {
@@ -645,7 +697,6 @@ async function loadBalance() {
 }
 
 async function boot() {
-  for (const el of document.querySelectorAll("[data-hero]")) el.innerHTML = heroSVG();
   try {
     bal = await loadBalance();
   } catch {
@@ -653,8 +704,22 @@ async function boot() {
     return;
   }
   save = loadSave() || newSave(bal);
-  try { await initHero(); } catch { hero = null; /* SVG hero stays as a fallback */ }
+  try {
+    await initWorld();
+  } catch (e) {
+    console.error(e);
+    $("loading-msg").textContent = "This browser could not start 3D (WebGL). Try Chrome, Safari or Firefox with hardware acceleration on.";
+    return;
+  }
   $("loading").remove();
+  window.addEventListener("resize", () => (world.mode === "shift" ? layoutStage() : world.resize()));
+  $("world").addEventListener("click", (e) => {
+    if (!shift || !running) return;
+    const id = world.pick(e.clientX, e.clientY);
+    if (id !== null) serveGuest(id, guestEls.get(id));
+  });
+  lastFrame = performance.now();
+  requestAnimationFrame(frame);
   syncToggles();
   $("btn-hints").addEventListener("click", () => {
     save.settings.hints = !save.settings.hints;
@@ -687,6 +752,8 @@ async function boot() {
     if ($("paused").returnValue === "quit") {
       shift = null;
       running = false;
+      for (const k of Object.keys(mg)) sfx.stopLoop(k);
+      clearGuests();
       renderTitle();
       return;
     }

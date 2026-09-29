@@ -438,3 +438,56 @@ body[data-loc="4"] .hud { background: #2a1a10; }
   .guest { width: calc((100vw - 44px) / 5); }
   .guest-type, .helper-badge { font-size: .56rem; padding: 1px 5px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
+
+/* ============================================================ v2: full 3D world */
+
+#world { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; z-index: 0; touch-action: manipulation; }
+#overlay { position: fixed; inset: 0; pointer-events: none; z-index: 2; overflow: hidden; }
+#app { position: relative; z-index: 1; }
+#loading { position: fixed; inset: 0; z-index: 10; }
+
+.title-over {
+  display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+  gap: 16px; text-align: center;
+  background: linear-gradient(180deg, rgba(10,92,99,0) 50%, rgba(10,92,99,.6) 100%);
+}
+.title-over .sign { margin-top: 3vh; }
+.title-over .title-actions { margin-top: auto; }
+.title-over .title-loc { color: var(--paper); font-weight: 800; text-shadow: 0 2px 0 var(--ink); margin: 0; }
+.title-over .how { margin-bottom: 2vh; }
+
+#screen-shift { background: none; pointer-events: none; grid-template-rows: auto 1fr auto; }
+#screen-shift .hud, #screen-shift .stations { pointer-events: auto; }
+.stage { position: relative; pointer-events: none; min-height: 0; }
+.cup-panel {
+  position: absolute; left: 12px; bottom: 10px; max-width: min(440px, 72vw);
+  background: rgba(58, 35, 23, .84); color: var(--paper); border-radius: 14px; padding: 8px 12px;
+}
+.cup-panel .cup-slot { min-height: 0; }
+.cup-panel .cup { font-size: 30px; }
+.cup-panel .cup.size-L { font-size: 38px; }
+.stage .toast { position: absolute; top: 10px; }
+.stations { box-shadow: 0 -4px 0 rgba(58,35,23,.25); }
+
+.summary { background: rgba(10, 92, 99, .55); }
+.shop { background: rgba(10, 92, 99, .45); }
+
+.guest.bubble {
+  position: absolute; left: 0; top: 0; pointer-events: auto;
+  animation: none; transition: opacity .25s;
+  width: clamp(88px, 13vw, 136px);
+}
+.guest.bubble.leaving { animation: none; opacity: 0 !important; }
+.guest.bubble .order { box-shadow: 0 3px 0 var(--ink); }
+.guest.bubble .face { width: 44px; height: 44px; font-size: 24px; padding: 4px; }
+.pop { position: fixed; }
+
+@media (max-width: 560px) {
+  .guest.bubble { width: 21vw; }
+  .guest.bubble .order { font-size: .62rem; padding: 3px 4px; }
+  .guest.bubble .order b { font-size: .68rem; }
+  .guest.bubble .face { width: 32px; height: 32px; font-size: 17px; padding: 3px; }
+  .guest.bubble .guest-type { display: none; }
+  .cup-panel { left: 6px; right: 6px; max-width: none; padding: 6px 10px; }
+  .cup-panel .chip { font-size: .72rem; padding: 2px 8px; }
+}
