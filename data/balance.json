@@ -535,20 +535,33 @@
       "rep_weight": 4.0
     }
   },
-  "mvp": {
-    "_comment": "What the web MVP actually enables. The simulator ignores this block.",
-    "location": 1,
-    "modifiers": [
-      "size_L",
-      "syrup"
-    ],
-    "customer_types": [
-      "tourist",
-      "local",
-      "student",
-      "office_rush"
-    ],
+  "web": {
+    "_comment": "Settings used only by the browser game. The simulator ignores this block.",
+    "modifiers_by_loc": {
+      "1": [
+        "size_L",
+        "syrup"
+      ],
+      "2": [
+        "size_L",
+        "syrup",
+        "extra_shot"
+      ],
+      "3": [
+        "size_L",
+        "syrup",
+        "extra_shot"
+      ],
+      "4": [
+        "size_L",
+        "syrup",
+        "extra_shot"
+      ]
+    },
     "queue_cap": 5,
+    "hint_days": 3,
+    "helper_mistake_chance": 0.04,
+    "helper_quality": 0.8,
     "minigames": {
       "grind_s": 1.6,
       "grind_zone": [
@@ -564,6 +577,16 @@
       "steam_zone": [
         0.6,
         0.78
+      ],
+      "whisk_s": 1.8,
+      "whisk_zone": [
+        0.6,
+        0.85
+      ],
+      "pour_s": 4.0,
+      "pour_zone": [
+        0.7,
+        0.88
       ]
     }
   }

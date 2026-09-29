@@ -9,10 +9,30 @@ export function newSave(bal) {
     day: 1,
     coins: bal.shift.start_coins,
     rep: bal.shift.start_reputation,
-    loc: bal.mvp.location,
+    loc: 1,
     upgrades: {},
     stats: { served: 0, walkouts: 0, earned: 0, bestDay: 0 },
+    settings: { sound: true, hints: true },
+    seenFinale: false,
   };
+}
+
+// Fill in fields added after a save was created, so old saves keep working.
+export function migrateSave(bal, s) {
+  const base = newSave(bal);
+  return { ...base, ...s, stats: { ...base.stats, ...(s.stats || {}) }, settings: { ...base.settings, ...(s.settings || {}) } };
+}
+
+export function modsFor(bal, save) {
+  return bal.web.modifiers_by_loc[String(save.loc)] || [];
+}
+
+// Every step some drink on today's menu can need. Used to decide which stations to show.
+export function stepsNeeded(bal, save) {
+  const need = new Set();
+  for (const [, d] of menuFor(bal, save)) for (const st of d.recipe) need.add(st);
+  for (const m of modsFor(bal, save)) if (bal.modifiers[m].adds_step) need.add(bal.modifiers[m].adds_step);
+  return need;
 }
 
 export function eff(bal, save, id, key, def) {
@@ -93,7 +113,8 @@ export class Shift {
     this.event = this.rollEvent();
     const L = bal.locations[String(save.loc)];
     const rp = bal.reputation;
-    this.mix = Object.entries(L.mix).filter(([k, w]) => w > 0 && bal.mvp.customer_types.includes(k));
+    this.mix = Object.entries(L.mix).filter(([, w]) => w > 0);
+    this.helper = save.upgrades.helper_barista ? { cust: null, busyUntil: 0 } : null;
     this.baseRate = (L.arrivals_per_min / 60)
       * (rp.arrival_mult_base + rp.arrival_mult_per_star * save.rep)
       * this.event.arrival_mult
@@ -145,7 +166,7 @@ export class Shift {
       return [id, w];
     }));
     const d = bal.drinks[drinkId];
-    const mods = bal.mvp.modifiers.filter((m) => {
+    const mods = modsFor(bal, this.save).filter((m) => {
       const mod = bal.modifiers[m];
       if (mod.only_tag && !d.tags.includes(mod.only_tag)) return false;
       return this.rng() < mod.chance;
@@ -157,7 +178,7 @@ export class Shift {
       arrive: this.t,
       patience: c.patience_s * this.patienceMult,
     };
-    if (this.customers.length >= bal.mvp.queue_cap) {
+    if (this.customers.length >= bal.web.queue_cap) {
       this.walkout(cust, "full");
       return;
     }
@@ -166,6 +187,7 @@ export class Shift {
   }
 
   walkout(cust, reason) {
+    if (this.helper && this.helper.cust === cust) this.helper.cust = null;
     const w = cust.critic ? this.bal.events.critic.rep_weight : 1;
     this.res.walkouts += 1;
     this.res.sats.push(this.bal.reputation.walkout_satisfaction);
@@ -186,7 +208,35 @@ export class Shift {
         this.walkout(c, "patience");
       }
     }
+    if (this.helper) this.tickHelper();
     if (this.t >= this.duration && this.customers.length === 0) this.done = true;
+  }
+
+  tickHelper() {
+    const h = this.helper;
+    const bal = this.bal;
+    if (h.cust && this.t >= h.busyUntil) {
+      const c = h.cust;
+      h.cust = null;
+      if (this.customers.includes(c)) {
+        const correct = this.rng() >= bal.web.helper_mistake_chance;
+        this.settle(c, correct, bal.web.helper_quality, true);
+      }
+    }
+    if (!h.cust) {
+      const c = this.customers.slice(0, 4).find((x) => bal.drinks[x.drinkId].tags.includes("simple"));
+      if (c) {
+        const d = bal.drinks[c.drinkId];
+        const t = (d.time_s + c.mods.reduce((s, m) => s + bal.modifiers[m].time_add_s, 0))
+          * bal.upgrades.helper_barista.helper_time_mult + bal.shift.serve_overhead_s;
+        h.cust = c;
+        h.busyUntil = this.t + t;
+      }
+    }
+  }
+
+  helperOn(c) {
+    return !!(this.helper && this.helper.cust === c);
   }
 
   patienceLeft(c) {
@@ -243,16 +293,22 @@ export class Shift {
 
     const req = requiredFor(bal, cust);
     const correct = this.cup.size === req.size && sameMultiset(this.cup.steps, req.steps);
-    const ct = bal.customers[cust.type];
-    const rp = bal.reputation;
     const qAdd = eff(bal, this.save, "grinder", "quality_add", 0) + eff(bal, this.save, "espresso_machine", "quality_add", 0);
     const avgQ = this.cup.q.reduce((s, x) => s + x, 0) / this.cup.q.length;
-    const quality = correct ? clamp(avgQ + qAdd) : rp.wrong_order_quality;
+    this.cup = null;
+    if (this.helper && this.helper.cust === cust) this.helper.cust = null;
+    return this.settle(cust, correct, clamp(avgQ + qAdd), false);
+  }
+
+  settle(cust, correct, rawQuality, byHelper) {
+    const bal = this.bal;
+    const ct = bal.customers[cust.type];
+    const rp = bal.reputation;
+    const quality = correct ? rawQuality : rp.wrong_order_quality;
     const wait = this.t - cust.arrive;
     const waitScore = Math.max(0, 1 - rp.wait_penalty * wait / cust.patience);
     const sat = clamp(ct.quality_weight * quality + (1 - ct.quality_weight) * waitScore
       + eff(bal, this.save, "loyalty_cards", "satisfaction_add", 0));
-
     const price = orderPrice(bal, this.save, cust);
     const tip = correct ? price * ct.tip_rate * eff(bal, this.save, "tip_jar", "tip_mult", 1) * sat * sat : 0;
     this.res.revenue += price;
@@ -260,12 +316,11 @@ export class Shift {
     this.res.ingredients += bal.drinks[cust.drinkId].cost;
     this.res.served += 1;
     if (correct && quality >= 0.9) this.res.perfect += 1;
+    if (!correct) this.res.wrong = (this.res.wrong || 0) + 1;
     this.res.sats.push(sat);
     this.res.weights.push(cust.critic ? bal.events.critic.rep_weight : 1);
-
     this.customers.splice(this.customers.indexOf(cust), 1);
-    this.cup = null;
-    const result = { ok: true, correct, quality, sat, price, tip, cust };
+    const result = { ok: true, correct, quality, sat, price, tip, cust, byHelper };
     this.log.push({ type: "served", ...result });
     return result;
   }
@@ -332,4 +387,39 @@ export function buy(bal, save, id) {
 export function nextLocation(bal, save) {
   const n = bal.locations[String(save.loc + 1)];
   return n ? { ...n, index: save.loc + 1 } : null;
+}
+
+export function canRelocate(bal, save) {
+  const n = nextLocation(bal, save);
+  return !!n && save.rep >= n.min_stars && save.coins >= n.move_cost;
+}
+
+export function relocate(bal, save) {
+  if (!canRelocate(bal, save)) return false;
+  const n = nextLocation(bal, save);
+  save.coins -= n.move_cost;
+  save.loc = n.index;
+  return true;
+}
+
+// Tutorial coach: which station (or guest) should be pressed next for the given order.
+export function nextHint(shift, cust) {
+  const bal = shift.bal;
+  const req = requiredFor(bal, cust);
+  const cup = shift.cup;
+  if (!cup) return { station: req.size === "L" ? "cupL" : "cupM" };
+  if (cup.size !== req.size) return { station: "trash", why: "wrong cup size" };
+  const have = [...cup.steps];
+  const missing = [];
+  for (const st of req.steps) {
+    const i = have.indexOf(st);
+    if (i >= 0) have.splice(i, 1); else missing.push(st);
+  }
+  if (have.length) return { station: "trash", why: "extra ingredient" };
+  if (!missing.length) return { guest: cust.id };
+  // follow recipe order: shot first when needed, foam only after milk
+  const order = bal.drinks[cust.drinkId].recipe.concat(cust.mods.map((m) => bal.modifiers[m].adds_step).filter(Boolean));
+  const next = order.find((st) => missing.includes(st) && !(st === "foam" && !cup.steps.includes("milk")));
+  if (next === "shot") return { station: shift.grounds === null ? "grind" : "shot" };
+  return { station: next };
 }
